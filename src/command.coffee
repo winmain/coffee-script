@@ -35,6 +35,7 @@ SWITCHES = [
   ['-b', '--bare',            'compile without a top-level function wrapper']
   ['-c', '--compile',         'compile to JavaScript and save as .js files']
   ['-e', '--eval',            'pass a string from the command line as input']
+  ['-g', '--goog',            'compile in Google Closure compatibility mode']
   ['-h', '--help',            'display this help message']
   ['-i', '--interactive',     'run an interactive CoffeeScript REPL']
   ['-j', '--join [FILE]',     'concatenate the source CoffeeScript before compiling']
@@ -305,7 +306,7 @@ parseOptions = ->
 
 # The compile-time options to pass to the CoffeeScript compiler.
 compileOptions = (filename) ->
-  {filename, literate: helpers.isLiterate(filename), bare: opts.bare, header: opts.compile}
+  {filename, literate: helpers.isLiterate(filename), bare: opts.bare, header: opts.compile, goog: opts.goog}
 
 # Start up a new Node.js instance with the arguments in `--nodejs` passed to
 # the `node` binary, preserving the other options.
