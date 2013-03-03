@@ -519,14 +519,14 @@ exports.Call = class Call extends Base
     {name} = method
     throw SyntaxError 'cannot call super on an anonymous function.' unless name?
     if method.klass
-      accesses = [new Access(new Literal '__super__')]
+      accesses = [new Access(new Literal superClassReference(o))]
       accesses.push new Access new Literal 'constructor' if method.static
       accesses.push new Access new Literal name
       (new Value (new Literal method.klass), accesses).compile o
     else if method.ctor
-      "#{name}.__super__.constructor"
+      "#{name}.#{superClassReference(o)}.constructor"
     else
-      "this.constructor.__super__.#{name}"
+      "this.constructor.#{superClassReference(o)}.#{name}"
 
   # The appropriate `this` value for a `super` call.
   superThis : (o) ->
@@ -895,7 +895,8 @@ exports.Class = class Class extends Base
           if func.bound
             throw new Error 'cannot define a constructor as a bound function'
           if func instanceof Code
-            assign = @ctor = func
+            @ctor = func
+            assign = @ctorBlock = new Block [@ctor]
           else
             @externalCtor = o.scope.freeVariable 'class'
             assign = new Assign new Literal(@externalCtor), func
@@ -934,16 +935,19 @@ exports.Class = class Class extends Base
 
   # Make sure that a constructor is defined for the class, and properly
   # configured.
-  ensureConstructor: (name) ->
+  ensureConstructor: (name, o) ->
     if not @ctor
       @ctor = new Code
-      @ctor.body.push new Literal "#{name}.__super__.constructor.apply(this, arguments)" if @parent
+      @ctor.body.push new Literal "#{name}.#{superClassReference(o)}.constructor.apply(this, arguments)" if @parent
       @ctor.body.push new Literal "#{@externalCtor}.apply(this, arguments)" if @externalCtor
       @ctor.body.makeReturn()
-      @body.expressions.unshift @ctor
+      @ctorBlock = new Block [@ctor]
+      @body.expressions.unshift @ctorBlock
     @ctor.ctor     = @ctor.name = name
     @ctor.klass    = null
     @ctor.noReturn = yes
+    if o.goog and @parent
+      @ctorBlock.push new Literal "goog.inherits(#{name}, #{@parent.value})"
 
   # Instead of generating the JavaScript string directly, we build up the
   # equivalent syntax tree and compile that, in pieces. You can see the
@@ -957,25 +961,28 @@ exports.Class = class Class extends Base
     @hoistDirectivePrologue()
     @setContext name
     @walkBody name, o
-    @ensureConstructor name
+    @ensureConstructor name, o
     @body.spaced = yes
-    @body.expressions.unshift @ctor unless @ctor instanceof Code
-    @body.expressions.push lname
+    @body.expressions.push lname unless o.goog
     @body.expressions.unshift @directives...
     @addBoundFunctions o
 
-    call  = Closure.wrap @body
+    if o.goog
+      return @body.compile o
 
-    if @parent
-      @superClass = new Literal o.scope.freeVariable 'super', no
-      @body.expressions.unshift new Extends lname, @superClass
-      call.args.push @parent
-      params = call.variable.params or call.variable.base.params
-      params.push new Param @superClass
+    else
+      call  = Closure.wrap @body
 
-    klass = new Parens call, yes
-    klass = new Assign @variable, klass if @variable
-    klass.compile o
+      if @parent
+        @superClass = new Literal o.scope.freeVariable 'super', no
+        @body.expressions.unshift new Extends lname, @superClass
+        call.args.push @parent
+        params = call.variable.params or call.variable.base.params
+        params.push new Param @superClass
+
+      klass = new Parens call, yes
+      klass = new Assign @variable, klass if @variable
+      klass.compile o
 
 #### Assign
 
@@ -1200,8 +1207,12 @@ exports.Code = class Code extends Base
       else if not @static
         o.scope.parent.assign '_this', 'this'
     idt   = o.indent
-    code  = 'function'
-    code  += ' ' + @name if @ctor
+    code = ''
+    # It is convenient to use unnamed constructor in Google Closure and use
+    # assignmed instead.
+    code += "#{@name} = " if @ctor and o.goog
+    code  += 'function'
+    code  += ' ' + @name if @ctor and not o.goog
     code  += '(' + params.join(', ') + ') {'
     code  += "\n#{ @body.compileWithDeclarations o }\n#{@tab}" unless @body.isEmpty()
     code  += '}'
@@ -2026,3 +2037,7 @@ utility = (name) ->
 multident = (code, tab) ->
   code = code.replace /\n/g, '$&' + tab
   code.replace /\s+$/, ''
+
+# Helper for deciding whether to use goog version of super calls
+superClassReference = (o) ->
+  if o.goog then 'superClass_' else '__super__'
