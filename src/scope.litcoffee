@@ -23,7 +23,25 @@ it belongs to.
       constructor: (@parent, @expressions, @method) ->
         @variables = [{name: 'arguments', type: 'arguments'}]
         @positions = {}
+        @requires = {}
+        @provides = {}
         Scope.root = this unless @parent
+
+Add goog.provide
+      provide: (name) ->
+        @provides['#' + name] = name
+
+Add goog.require
+      require: (name) ->
+        @requires['#' + name] = name
+
+Get requires that are not provided already
+      getRequires: ->
+        (name for key, name of @requires when not (key of @provides))
+
+Get provides
+      getProvides: ->
+        (name for key, name of @provides)
 
 Adds a new variable or overrides an existing one.
 

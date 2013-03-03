@@ -265,6 +265,13 @@ exports.Block = class Block extends Base
       prelude = "#{@compileNode merge(o, indent: '')}\n" if preludeExps.length
       @expressions = rest
     code = @compileWithDeclarations o
+    if o.goog
+      provideCode = ''
+      for name in o.scope.getProvides()
+        provideCode += "goog.provide('#{name}');\n"
+      for name in o.scope.getRequires()
+        provideCode += "goog.require('#{name}');\n"
+      code = provideCode + code
     return code if o.bare
     "#{prelude}(function() {\n#{code}\n}).call(this);\n"
 
@@ -947,7 +954,7 @@ exports.Class = class Class extends Base
     @ctor.klass    = null
     @ctor.noReturn = yes
     if o.goog and @parent
-      @ctorBlock.push new Literal "goog.inherits(#{name}, #{@parent.value})"
+      @ctorBlock.push new Literal "goog.inherits(#{name}, #{@parent.compile(o)})"
 
   # Instead of generating the JavaScript string directly, we build up the
   # equivalent syntax tree and compile that, in pieces. You can see the
@@ -966,6 +973,10 @@ exports.Class = class Class extends Base
     @body.expressions.push lname unless o.goog
     @body.expressions.unshift @directives...
     @addBoundFunctions o
+
+    if o.goog
+      addProvide name
+      addRequire @parent.compile(o) if @parent
 
     if o.goog
       return @body.compile o
@@ -2041,3 +2052,11 @@ multident = (code, tab) ->
 # Helper for deciding whether to use goog version of super calls
 superClassReference = (o) ->
   if o.goog then 'superClass_' else '__super__'
+
+# Helper for inserting goog.provide
+addProvide = (name) ->
+  Scope.root.provide(name)
+
+# Helper for inserting goog.require
+addRequire = (name) ->
+  Scope.root.require(name)
