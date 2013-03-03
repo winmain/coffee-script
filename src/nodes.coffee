@@ -880,11 +880,7 @@ exports.Class = class Class extends Base
   addBoundFunctions: (o) ->
     for bvar in @boundFuncs
       lhs = (new Value (new Literal "this"), [new Access bvar]).compile o
-      if o.goog
-        bind = 'goog.bind'
-      else
-        bind = utility 'bind'
-      @ctor.body.unshift new Literal "#{lhs} = #{bind}(#{lhs}, this)"
+      @ctor.body.unshift new Literal "#{lhs} = #{bind o}(#{lhs}, this)"
     return
 
   # Merge the properties from a top-level object as prototypal properties
@@ -1093,7 +1089,7 @@ exports.Assign = class Assign extends Base
       if not splat and obj instanceof Splat
         name = obj.name.unwrap().value
         obj = obj.unwrap()
-        val = "#{olen} <= #{vvar}.length ? #{ utility 'slice' }.call(#{vvar}, #{i}"
+        val = "#{olen} <= #{vvar}.length ? #{slice o}(#{vvar}, #{i}"
         if rest = olen - i - 1
           ivar = o.scope.freeVariable 'i'
           val += ", #{ivar} = #{vvar}.length - #{rest}) : (#{ivar} = #{i}, [])"
@@ -1338,12 +1334,12 @@ exports.Splat = class Splat extends Base
     if list.length is 1
       code = list[0].compile o, LEVEL_LIST
       return code if apply
-      return "#{ utility 'slice' }.call(#{code})"
+      return "#{slice o}(#{code})"
     args = list[index..]
     for node, i in args
       code = node.compile o, LEVEL_LIST
       args[i] = if node instanceof Splat
-      then "#{ utility 'slice' }.call(#{code})"
+      then "#{slice o}(#{code})"
       else "[#{code}]"
     return args[0] + ".concat(#{ args[1..].join ', ' })" if index is 0
     base = (node.compile o, LEVEL_LIST for node in list[...index])
@@ -1578,11 +1574,7 @@ exports.In = class In extends Base
 
   compileLoopTest: (o) ->
     [sub, ref] = @object.cache o, LEVEL_LIST
-    if o.goog
-      addRequire 'goog.array'
-      code = "goog.array.indexOf(#{@array.compile o, LEVEL_LIST}, #{ref}) "
-    else
-      code = utility('indexOf') + ".call(#{ @array.compile o, LEVEL_LIST }, #{ref}) "
+    code = indexOf(o) + "(#{ @array.compile o, LEVEL_LIST }, #{ref}) "
     code += if @negated then '< 0' else '>= 0'
     return code if sub is ref
     code = sub + ', ' + code
@@ -1791,7 +1783,7 @@ exports.For = class For extends While
     varPart     = "\n#{idt1}#{namePart};" if namePart
     if @object
       forPart   = "#{kvar} in #{svar}"
-      guardPart = "\n#{idt1}if (!#{utility 'hasProp'}.call(#{svar}, #{kvar})) continue;" if @own
+      guardPart = "\n#{idt1}if (!#{hasProp o}(#{svar}, #{kvar})) continue;" if @own
     body        = body.compile merge(o, indent: idt1), LEVEL_TOP
     body        = '\n' + body + '\n' if body
     """
@@ -2064,3 +2056,33 @@ addProvide = (name) ->
 # Helper for inserting goog.require
 addRequire = (name) ->
   Scope.root.require(name)
+
+# Helper to return either utility slice or goog.array.slice
+slice = (o) ->
+  if o.goog
+    addRequire 'goog.array'
+    return "goog.array.slice"
+  else
+    return "#{utility 'slice'}.call"
+
+# Helper to return either utility hasProp or Object.prototype.hasOwnProperty
+hasProp = (o) ->
+  if o.goog
+    return 'Object.prototype.hasOwnProperty.call'
+  else
+    return "#{utility 'hasProp'}.call"
+
+# Helper to return either utility bind or goog.bind
+bind = (o) ->
+  if o.goog
+    return 'goog.bind'
+  else
+    return "#{utility 'bind'}"
+
+# Helper to return either utility indexOf or goog.array.indexOf
+indexOf = (o) ->
+  if o.goog
+    addRequire 'goog.array'
+    return 'goog.array.indexOf.call'
+  else
+    return "#{utility 'indexOf'}.call"
