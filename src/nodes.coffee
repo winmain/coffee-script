@@ -873,7 +873,11 @@ exports.Class = class Class extends Base
   addBoundFunctions: (o) ->
     for bvar in @boundFuncs
       lhs = (new Value (new Literal "this"), [new Access bvar]).compile o
-      @ctor.body.unshift new Literal "#{lhs} = #{utility 'bind'}(#{lhs}, this)"
+      if o.goog
+        bind = 'goog.bind'
+      else
+        bind = utility 'bind'
+      @ctor.body.unshift new Literal "#{lhs} = #{bind}(#{lhs}, this)"
     return
 
   # Merge the properties from a top-level object as prototypal properties
@@ -1973,6 +1977,8 @@ UTILITIES =
   # Shortcuts to speed up the lookup time for native functions.
   hasProp: -> '{}.hasOwnProperty'
   slice  : -> '[].slice'
+
+
 
 # Levels indicate a node's position in the AST. Useful for knowing if
 # parens are necessary or superfluous.
