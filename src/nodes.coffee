@@ -1578,8 +1578,12 @@ exports.In = class In extends Base
 
   compileLoopTest: (o) ->
     [sub, ref] = @object.cache o, LEVEL_LIST
-    code = utility('indexOf') + ".call(#{ @array.compile o, LEVEL_LIST }, #{ref}) " +
-           if @negated then '< 0' else '>= 0'
+    if o.goog
+      addRequire 'goog.array'
+      code = "goog.array.indexOf(#{@array.compile o, LEVEL_LIST}, #{ref}) "
+    else
+      code = utility('indexOf') + ".call(#{ @array.compile o, LEVEL_LIST }, #{ref}) "
+    code += if @negated then '< 0' else '>= 0'
     return code if sub is ref
     code = sub + ', ' + code
     if o.level < LEVEL_LIST then code else "(#{code})"
