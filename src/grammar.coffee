@@ -94,6 +94,8 @@ grammar =
   Statement: [
     o 'Return'
     o 'Comment'
+    o 'Include'
+    o 'Provide'
     o 'STATEMENT',                              -> new Literal $1
   ]
 
@@ -414,6 +416,46 @@ grammar =
   Parenthetical: [
     o '( Body )',                               -> new Parens $2
     o '( INDENT Body OUTDENT )',                -> new Parens $3
+  ]
+
+  # Include statement
+  Include: [
+    o 'INCLUDE ( IncludeList OptComma )',       -> new Include $3
+    o 'INCLUDE IncludeArg',                     -> new Include [$2]
+  ]
+
+  # Provide statement
+  Provide: [
+    o 'PROVIDE ( ProvideList OptComma )',       -> new Provide $3
+    o 'PROVIDE Namespace',                      -> new Provide [$2]
+  ]
+
+  # Comma separated list of provides
+  ProvideList: [
+    o 'Namespace',                                 -> [$1]
+    o 'ProvideList , Namespace',                   -> $1.concat $3
+    o 'ProvideList OptComma TERMINATOR Namespace', -> $1.concat $4
+    o 'INDENT ProvideList OptComma OUTDENT',       -> $2
+  ]
+
+  # Comma separated list of includes
+  IncludeList: [
+    o 'IncludeArg',                                 -> [$1]
+    o 'IncludeList , IncludeArg',                   -> $1.concat $3
+    o 'IncludeList OptComma TERMINATOR IncludeArg', -> $1.concat $4
+    o 'INDENT IncludeList OptComma OUTDENT',        -> $2
+  ]
+
+  # Include argument
+  IncludeArg: [
+    o 'Namespace',                              -> new IncludeArg $1
+    o 'Namespace AS Identifier',                -> new IncludeArg $1, $3
+  ]
+
+  # Namespace
+  Namespace: [
+    o 'Identifier',                             -> new Namespace $1
+    o 'Namespace . Identifier',                 -> new Namespace $3, $1
   ]
 
   # The condition portion of a while loop.

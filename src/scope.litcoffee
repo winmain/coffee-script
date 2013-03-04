@@ -25,6 +25,7 @@ it belongs to.
         @positions = {}
         @requires = {}
         @provides = {}
+        @scopedIncludes = {}
         Scope.root = this unless @parent
 
 Add goog.provide
@@ -32,8 +33,14 @@ Add goog.provide
         @provides['#' + name] = name
 
 Add goog.require
-      require: (name) ->
+      require: (name, short) ->
         @requires['#' + name] = name
+        if short
+          @scopedIncludes['#' + short] = name
+
+Get list of shortcut names for goog.scope
+      getScopedIncludes: ->
+        ([key.slice(1), name] for key, name of @scopedIncludes)
 
 Get requires that are not provided already
       getRequires: ->

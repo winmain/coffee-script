@@ -271,6 +271,22 @@ exports.Block = class Block extends Base
         provideCode += "goog.provide('#{name}');\n"
       for name in o.scope.getRequires()
         provideCode += "goog.require('#{name}');\n"
+
+      # Add short names for include
+      # ``include some.very.long.package.name as shortcut`` will create
+      #
+      # goog.scope(function{
+      #   var shortcut = some.very.long.package.name;
+      #   ... the rest of the code ...
+      # });
+      scopedIncludes = o.scope.getScopedIncludes()
+      if scopedIncludes.length
+        scopeCode = ''
+        for scopedInclude in scopedIncludes
+          [short, namespace] = scopedInclude
+          scopeCode += "var #{short} = #{namespace};\n"
+        code = "goog.scope(function() {\n#{scopeCode}\n#{code}\n});"
+
       code = provideCode + code
     return code if o.bare
     "#{prelude}(function() {\n#{code}\n}).call(this);\n"
@@ -496,6 +512,43 @@ exports.Comment = class Comment extends Base
     code = '/*' + multident(@comment, @tab) + "\n#{@tab}*/\n"
     code = o.indent + code if (level or o.level) is LEVEL_TOP
     code
+
+#### Include
+ 
+# Allow include statements of form include package1, package2, ..., packageN
+exports.Include = class Include extends Base
+  constructor: (@packages) ->
+
+  compileNode: (o) ->
+    pack.compile(o) for pack in @packages
+    return ''
+
+exports.Provide = class Provide extends Base
+  constructor: (@packages) ->
+
+  compileNode: (o) ->
+    addProvide pack.compile(o) for pack in @packages
+    return ''
+
+#### IncludeArg
+
+exports.IncludeArg = class IncludeArg extends Base
+  constructor: (@include, @short) ->
+
+  compileNode: (o) ->
+    addRequire @include.compile(o), @short?.compile(o)
+    return ''
+
+#### Namespace
+exports.Namespace = class Namespace extends Base
+  constructor: (@identifier, @parent) ->
+
+  compileNode: (o) ->
+    code = ''
+    code += (@parent.compile(o) + '.') if @parent
+    code += @identifier.compile(o)
+    return code
+
 
 #### Call
 
@@ -2054,8 +2107,8 @@ addProvide = (name) ->
   Scope.root.provide(name)
 
 # Helper for inserting goog.require
-addRequire = (name) ->
-  Scope.root.require(name)
+addRequire = (name, short) ->
+  Scope.root.require(name, short)
 
 # Helper to return either utility slice or goog.array.slice
 slice = (o) ->
