@@ -575,18 +575,15 @@ exports.Call = class Call extends Base
   # method.
   superReference: (o) ->
     method = o.scope.namedMethod()
-    throw SyntaxError 'cannot call super outside of a function.' unless method
-    {name} = method
-    throw SyntaxError 'cannot call super on an anonymous function.' unless name?
-    if method.klass
+    if method?.klass
       accesses = [new Access(new Literal superClassReference(o))]
       accesses.push new Access new Literal 'constructor' if method.static
-      accesses.push new Access new Literal name
+      accesses.push new Access new Literal method.name
       (new Value (new Literal method.klass), accesses).compile o
-    else if method.ctor
-      "#{name}.#{superClassReference(o)}.constructor"
+    else if method?.ctor
+      "#{method.name}.#{superClassReference(o)}.constructor"
     else
-      "this.constructor.#{superClassReference(o)}.#{name}"
+      throw SyntaxError 'cannot call super outside of an instance method.'
 
   # The appropriate `this` value for a `super` call.
   superThis : (o) ->
@@ -931,9 +928,22 @@ exports.Class = class Class extends Base
   # Ensure that all functions bound to the instance are proxied in the
   # constructor.
   addBoundFunctions: (o) ->
-    for bvar in @boundFuncs
-      lhs = (new Value (new Literal "this"), [new Access bvar]).compile o
-      @ctor.body.unshift new Literal "#{lhs} = #{bind o}(#{lhs}, this)"
+    if @boundFuncs.length
+      o.scope.assign '_this', 'this'
+      for [name, func] in @boundFuncs
+        lhs = new Value (new Literal "this"), [new Access name]
+        body = new Block [new Return new Literal "#{@ctor.name}.prototype.#{name.value}.apply(_this, arguments)"]
+        rhs = new Code func.params, body, 'boundfunc'
+        bound = new Assign lhs, rhs
+
+        @ctor.body.unshift bound
+
+        # {base} = assign.variable
+        # lhs = (new Value (new Literal "this"), [new Access base]).compile o
+        # @ctor.body.unshift new Literal """#{lhs} = function() {
+        # #{o.indent}  return #{@ctor.name}.prototype.#{base.value}.apply(_this, arguments);
+        # #{o.indent}}\n
+        # """
     return
 
   # Merge the properties from a top-level object as prototypal properties
@@ -964,7 +974,7 @@ exports.Class = class Class extends Base
           else
             assign.variable = new Value(new Literal(name), [(new Access new Literal 'prototype'), new Access base ])
             if func instanceof Code and func.bound
-              @boundFuncs.push base
+              @boundFuncs.push [base, func]
               func.bound = no
       assign
     compact exprs
@@ -972,12 +982,15 @@ exports.Class = class Class extends Base
   # Walk the body of the class, looking for prototype properties to be converted.
   walkBody: (name, o) ->
     @traverseChildren false, (child) =>
+      cont = true
       return false if child instanceof Class
       if child instanceof Block
         for node, i in exps = child.expressions
           if node instanceof Value and node.isObject(true)
+            cont = false
             exps[i] = @addProperties node, name, o
         child.expressions = exps = flatten exps
+      cont and child not instanceof Class
 
   # `use strict` (and other directives) must be the first expression statement(s)
   # of a function body. This method ensures the prologue is correctly positioned
@@ -1957,23 +1970,22 @@ exports.If = class If extends Base
     if exeq
       return new If(@condition.invert(), @elseBodyNode(), type: 'if').compile o
 
+    indent   = o.indent + TAB
+    body     = @ensureBlock(@body).compile merge o, {indent}
     cond     = @condition.compile o, LEVEL_PAREN
-    o.indent += TAB
-    body     = @ensureBlock(@body)
-    ifPart   = "if (#{cond}) {\n#{body.compile(o)}\n#{@tab}}"
+    ifPart   = "if (#{cond}) {\n#{body}\n#{@tab}}"
     ifPart   = @tab + ifPart unless child
     return ifPart unless @elseBody
     ifPart + ' else ' + if @isChain
-      o.indent = @tab
       o.chainChild = yes
       @elseBody.unwrap().compile o, LEVEL_TOP
     else
-      "{\n#{ @elseBody.compile o, LEVEL_TOP }\n#{@tab}}"
+      "{\n#{ @elseBody.compile merge(o, {indent}), LEVEL_TOP }\n#{@tab}}"
 
   # Compile the `If` as a conditional operator.
   compileExpression: (o) ->
-    cond = @condition.compile o, LEVEL_COND
     body = @bodyNode().compile o, LEVEL_LIST
+    cond = @condition.compile o, LEVEL_COND
     alt  = if @elseBodyNode() then @elseBodyNode().compile(o, LEVEL_LIST) else 'void 0'
     code = "#{cond} ? #{body} : #{alt}"
     if o.level >= LEVEL_COND then "(#{code})" else code
@@ -2034,11 +2046,6 @@ UTILITIES =
   extends: -> """
     function(child, parent) { for (var key in parent) { if (#{utility 'hasProp'}.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; }
   """
-
-  # Create a function bound to the current value of "this".
-  bind: -> '''
-    function(fn, me){ return function(){ return fn.apply(me, arguments); }; }
-  '''
 
   # Discover if an item is in an array.
   indexOf: -> """
@@ -2124,13 +2131,6 @@ hasProp = (o) ->
     return 'Object.prototype.hasOwnProperty.call'
   else
     return "#{utility 'hasProp'}.call"
-
-# Helper to return either utility bind or goog.bind
-bind = (o) ->
-  if o.goog
-    return 'goog.bind'
-  else
-    return "#{utility 'bind'}"
 
 # Helper to return either utility indexOf or goog.array.indexOf
 indexOf = (o) ->
