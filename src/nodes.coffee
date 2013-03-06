@@ -1038,18 +1038,19 @@ exports.Class = class Class extends Base
     name  = decl or '_Class'
     name = "_#{name}" if name.reserved
     lname = new Literal name
+    fullname = if o.goog then @variable.compile o else name
 
     @hoistDirectivePrologue()
-    @setContext name
-    @walkBody name, o
-    @ensureConstructor name, o
+    @setContext fullname
+    @walkBody fullname, o
+    @ensureConstructor fullname, o
     @body.spaced = yes
     @body.expressions.push lname unless o.goog
     @body.expressions.unshift @directives...
     @addBoundFunctions o
 
     if o.goog
-      addProvide name
+      addProvide @variable.compile(o)
       addRequire @parent.compile(o) if @parent
 
     if o.goog
