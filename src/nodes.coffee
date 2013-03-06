@@ -974,7 +974,10 @@ exports.Class = class Class extends Base
             throw new Error 'cannot define a constructor as a bound function'
           if func instanceof Code
             @ctor = func
-            assign = @ctorBlock = new Block [@ctor]
+            @ctorBlock = new Block [@ctor]
+            # In goog mode constructor must be the very first statement in the class,
+            # so we set it directly in compileNode
+            assign = if o.goog then false else @ctorBlock
           else
             @externalCtor = o.scope.freeVariable 'class'
             assign = new Assign new Literal(@externalCtor), func
@@ -1023,7 +1026,9 @@ exports.Class = class Class extends Base
       @ctor.body.push new Literal "#{@externalCtor}.apply(this, arguments)" if @externalCtor
       @ctor.body.makeReturn()
       @ctorBlock = new Block [@ctor]
-      @body.expressions.unshift @ctorBlock
+      # In goog mode constructor must be the very first statement in the class,
+      # so we set it directly in compileNode
+      @body.expressions.unshift @ctorBlock unless o.goog
     @ctor.ctor     = @ctor.name = name
     @ctor.klass    = null
     @ctor.noReturn = yes
@@ -1044,6 +1049,9 @@ exports.Class = class Class extends Base
     @setContext fullname
     @walkBody fullname, o
     @ensureConstructor fullname, o
+     
+    # In goog mode constructor must be the very first statement in the class
+    @body.expressions.unshift @ctorBlock if o.goog
     @body.spaced = yes
     @body.expressions.push lname unless o.goog
     @body.expressions.unshift @directives...
