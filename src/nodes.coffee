@@ -625,7 +625,12 @@ exports.Call = class Call extends Base
   # Compile a vanilla function call.
   compileNode: (o) ->
     # Check for goog.require and goog.provide calls
-    if o.goog and @variable
+    # Be careful some nodes has compilation side effects, so let's try to
+    # restrict it as much as possible
+    if o.goog and
+        @variable instanceof exports.Value and
+        @variable.base instanceof exports.Literal and
+        @variable.base.value == 'goog'
       compiled_variable = @variable.compile o
       action = {
         'goog.require': addRequire,
