@@ -624,6 +624,18 @@ exports.Call = class Call extends Base
 
   # Compile a vanilla function call.
   compileNode: (o) ->
+    # Check for goog.require and goog.provide calls
+    if o.goog and @variable
+      compiled_variable = @variable.compile o
+      action = {
+        'goog.require': addRequire,
+        'goog.provide': addProvide,
+      }[compiled_variable]
+      namespace_arg = @args[0].compile(o).slice(1, -1)
+      if action?
+        action(namespace_arg)
+        return ''
+
     @variable?.front = @front
     if code = Splat.compileSplattedArray o, @args, true
       return @compileSplat o, code
