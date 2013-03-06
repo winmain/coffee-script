@@ -1019,21 +1019,23 @@ exports.Class = class Class extends Base
 
   # Make sure that a constructor is defined for the class, and properly
   # configured.
-  ensureConstructor: (name, o) ->
+  ensureConstructor: (name, fullname, o) ->
     if not @ctor
       @ctor = new Code
-      @ctor.body.push new Literal "#{name}.#{superClassReference(o)}.constructor.apply(this, arguments)" if @parent
+      @ctor.body.push new Literal "#{fullname}.#{superClassReference(o)}.constructor.apply(this, arguments)" if @parent
       @ctor.body.push new Literal "#{@externalCtor}.apply(this, arguments)" if @externalCtor
       @ctor.body.makeReturn()
       @ctorBlock = new Block [@ctor]
       # In goog mode constructor must be the very first statement in the class,
       # so we set it directly in compileNode
       @body.expressions.unshift @ctorBlock unless o.goog
-    @ctor.ctor     = @ctor.name = name
+    @ctor.ctor     = @ctor.name = fullname
     @ctor.klass    = null
     @ctor.noReturn = yes
     if o.goog and @parent
-      @ctorBlock.push new Literal "goog.inherits(#{name}, #{@parent.compile(o)})"
+      @ctorBlock.push new Literal "goog.inherits(#{fullname}, #{@parent.compile(o)})"
+    if o.goog and name != fullname
+      @ctorBlock.push new Literal "var #{name} = #{fullname}"
 
   # Instead of generating the JavaScript string directly, we build up the
   # equivalent syntax tree and compile that, in pieces. You can see the
@@ -1048,7 +1050,7 @@ exports.Class = class Class extends Base
     @hoistDirectivePrologue()
     @setContext fullname
     @walkBody fullname, o
-    @ensureConstructor fullname, o
+    @ensureConstructor name, fullname, o
      
     # In goog mode constructor must be the very first statement in the class
     @body.expressions.unshift @ctorBlock if o.goog
@@ -1062,7 +1064,7 @@ exports.Class = class Class extends Base
       addRequire @parent.compile(o) if @parent
 
     if o.goog
-      return @body.compile o
+      return "goog.scope(function(){\n#{@body.compile o}\n})"
 
     else
       call  = Closure.wrap @body
