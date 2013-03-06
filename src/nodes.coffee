@@ -631,8 +631,8 @@ exports.Call = class Call extends Base
         'goog.require': addRequire,
         'goog.provide': addProvide,
       }[compiled_variable]
-      namespace_arg = @args[0].compile(o).slice(1, -1)
       if action?
+        namespace_arg = @args[0].compile(o).slice(1, -1)
         action(namespace_arg)
         return ''
 
