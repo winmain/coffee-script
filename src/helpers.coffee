@@ -11,6 +11,16 @@ exports.ends = (string, literal, back) ->
   len = literal.length
   literal is string.substr string.length - len - (back or 0), len
 
+# Repeat a string `n` times.
+exports.repeat = repeat = (str, n) ->
+  # Use clever algorithm to have O(log(n)) string concatenation operations.
+  res = ''
+  while n > 0
+    res += str if n & 1
+    n >>>= 1
+    str += str
+  res
+
 # Trim out all falsy values from an array.
 exports.compact = (array) ->
   item for item in array when item
@@ -53,12 +63,23 @@ exports.del = (obj, key) ->
   val
 
 # Gets the last item of an array(-like) object.
-exports.last = (array, back) -> array[array.length - (back or 0) - 1]
+exports.last = last = (array, back) -> array[array.length - (back or 0) - 1]
 
 # Typical Array::some
 exports.some = Array::some ? (fn) ->
   return true for e in this when fn e
   false
+
+# Simple function for inverting Literate CoffeeScript code by putting the
+# documentation in comments, and bumping the actual code back out to the edge ...
+# producing a string of CoffeeScript code that can be compiled "normally".
+exports.invertLiterate = (code) ->
+  lines = for line in code.split('\n')
+    if match = (/^([ ]{4}|\t)/).exec line
+      line[match[0].length..]
+    else
+      '# ' + line
+  lines.join '\n'
 
 # Merge two jison-style location data objects together.
 # If `last` is not provided, this will simply return `first`.
@@ -92,6 +113,16 @@ exports.locationDataToString = (obj) ->
     else
       "No location data"
 
+# A `.coffee.md` compatible version of `basename`, that returns the file sans-extension.
+exports.baseFileName = (file, stripExt = no) ->
+  parts = file.split('/')
+  file = parts[parts.length - 1]
+  return file unless stripExt
+  parts = file.split('.')
+  parts.pop()
+  parts.pop() if parts[parts.length - 1] is 'coffee' and parts.length > 1
+  parts.join('.')
+
 # Determine if a filename represents a CoffeeScript file.
 exports.isCoffee = (file) -> /\.((lit)?coffee|coffee\.md)$/.test file
 
@@ -99,3 +130,57 @@ exports.isCoffee = (file) -> /\.((lit)?coffee|coffee\.md)$/.test file
 exports.isLiterate = (file) -> /\.(litcoffee|coffee\.md)$/.test file
 
 
+# Remove any "." components in a path, any ".."s in the middle of a path.  Leaves a trailing '/'
+# if present, unless removeTrailingSlash is set.
+exports.normalizePath = normalizePath = (path, removeTrailingSlash=no) ->
+  root = no # Does this path start with the root?
+  parts = path.split '/'
+  newParts = []
+  i = 0
+  # If the path started with a '/', set the root flag.
+  if parts.length > 1 and parts[0] == ''
+    parts.shift()
+    root = yes
+  for part, i in parts
+    if part in ['.', '']
+      if (i is parts.length - 1) and not removeTrailingSlash
+        # Leave the trailing '/'.  Note that we're pushing a '', but because we join with '/'s
+        # later, this will become a '/'.
+        newParts.push ''
+    else if part is '..'
+      if newParts.length is 0 or (newParts.length and last newParts is '..')
+        # Leave the ".."
+        newParts.push '..'
+      else
+        # Drop the '..' and remote the previous element
+        newParts.pop()
+    else
+      newParts.push part
+  if root
+    if newParts.length is 0 then return '/'
+    if newParts.length[0] is '..'
+      # Uhh...  This doesn't make any sense.
+      throw new Error "Invalid path: #{path}"
+    newParts.unshift '' # Add back the leading "/"
+  newParts.join '/'
+
+# Solve the relative path from `from` to `to`.
+#
+# This is the same as node's `path.relative()`, but can be used even if we're not running in node.
+# If paths are relative (don't have a leading '/') then we assume they are both relative to to
+# same working directory.
+#
+# If `from` is a relative path that starts with '..', then `cwd` must be provided to resolve
+# parent path names.
+exports.relativePath = (from, to, cwd=null) ->
+  if cwd
+    from = cwd + "/" + from
+    to = cwd + "/" + to
+  from = normalizePath(from).split '/'
+  to = normalizePath(to).split '/'
+  while from.length > 0 and to.length > 0 and from[0] == to[0]
+    from.shift()
+    to.shift()
+  if from.length and from[0] is ".." then throw new Error "'cwd' must be specified if 'from' references parent directory: #{from.join '/'} -> #{to.join '/'}"
+  answer = repeat "../", from.length - 1
+  answer + "#{to.join '/'}"

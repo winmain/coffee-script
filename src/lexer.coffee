@@ -12,7 +12,7 @@
 {Rewriter, INVERSES} = require './rewriter'
 
 # Import the helpers we need.
-{count, starts, compact, last, locationDataToString} = require './helpers'
+{count, starts, compact, last, invertLiterate, locationDataToString} = require './helpers'
 
 # The Lexer Class
 # ---------------
@@ -84,13 +84,7 @@ exports.Lexer = class Lexer
     if WHITESPACE.test code
         code = "\n#{code}"
         @chunkLine--
-    if @literate
-      lines = for line in code.split('\n')
-        if match = LITERATE.exec line
-          line[match[0].length..]
-        else
-          '# ' + line
-      code = lines.join '\n'
+    code = invertLiterate code if @literate
     code
 
   # Tokenizers
@@ -328,7 +322,7 @@ exports.Lexer = class Lexer
         @suppressNewlines()
         return indent.length
       diff = size - @indent + @outdebt
-      @token 'INDENT', diff, 0, indent.length
+      @token 'INDENT', diff, indent.length - size, size
       @indents.push diff
       @ends.push 'OUTDENT'
       @outdebt = @indebt = 0
@@ -595,7 +589,10 @@ exports.Lexer = class Lexer
         @tokens.push token
       else
         @error "Unexpected #{tag}"
-    @token ')', ')', offsetInChunk + lexedLength, 0 if interpolated
+    if interpolated
+      rparen = @makeToken ')', ')', offsetInChunk + lexedLength, 0
+      rparen.stringEnd = true
+      @tokens.push rparen
     tokens
 
   # Pairs up a closing token, ensuring that all listed pairs of tokens are
@@ -650,7 +647,7 @@ exports.Lexer = class Lexer
     # so if last_column == first_column, then we're looking at a character of length 1.
     lastCharacter = Math.max 0, length - 1
     [locationData.last_line, locationData.last_column] =
-      @getLineAndColumnFromChunk offsetInChunk + (length - 1)
+      @getLineAndColumnFromChunk offsetInChunk + (lastCharacter)
 
     token = [tag, value, locationData]
 
@@ -778,8 +775,6 @@ OPERATOR   = /// ^ (
 WHITESPACE = /^[^\n\S]+/
 
 COMMENT    = /^###([^#][\s\S]*?)(?:###[^\n\S]*|(?:###)$)|^(?:\s*#(?!##[^#]).*)+/
-
-LITERATE   = /^([ ]{4}|\t)/
 
 CODE       = /^[-=]>/
 

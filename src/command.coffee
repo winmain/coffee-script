@@ -5,13 +5,13 @@
 # interactive REPL.
 
 # External dependencies.
-fs             = require 'fs'
-path           = require 'path'
-helpers        = require './helpers'
-optparse       = require './optparse'
-CoffeeScript   = require './coffee-script'
-{spawn, exec}  = require 'child_process'
-{EventEmitter} = require 'events'
+fs                = require 'fs'
+path              = require 'path'
+helpers           = require './helpers'
+optparse          = require './optparse'
+CoffeeScript      = require './coffee-script'
+{spawn, exec}     = require 'child_process'
+{EventEmitter}    = require 'events'
 
 exists         = fs.exists or path.exists
 
@@ -40,6 +40,7 @@ SWITCHES = [
   ['-i', '--interactive',     'run an interactive CoffeeScript REPL']
   ['-j', '--join [FILE]',     'concatenate the source CoffeeScript before compiling']
   ['-l', '--lint',            'pipe the compiled JavaScript through JavaScript Lint']
+  ['-m', '--map',             'generate source map and save as .map files']
   ['-n', '--nodes',           'print out the parse tree that the parser produces']
   [      '--nodejs [ARGS]',   'pass options directly to the "node" binary']
   ['-o', '--output [DIR]',    'set the output directory for compiled JavaScript']
@@ -112,9 +113,9 @@ compilePath = (source, topLevel, base) ->
 # Compile a single source script, containing the given code, according to the
 # requested options. If evaluating the script directly sets `__filename`,
 # `__dirname` and `module.filename` to be correct relative to the script's path.
-compileScript = (file, input, base) ->
+compileScript = (file, input, base=null) ->
   o = opts
-  options = compileOptions file
+  options = compileOptions file, base
   try
     t = task = {file, input, options}
     CoffeeScript.emit 'compile', task
@@ -122,14 +123,23 @@ compileScript = (file, input, base) ->
     else if o.nodes       then printLine CoffeeScript.nodes(t.input, t.options).toString().trim()
     else if o.run         then CoffeeScript.run t.input, t.options
     else if o.join and t.file isnt o.join
+      t.input = helpers.invertLiterate t.input if helpers.isLiterate file
       sourceCode[sources.indexOf(t.file)] = t.input
       compileJoin()
     else
-      t.output = CoffeeScript.compile t.input, t.options
+      compiled = CoffeeScript.compile t.input, t.options
+      t.output = compiled
+      if o.map
+        t.output = compiled.js
+        t.sourceMap = compiled.v3SourceMap
+
       CoffeeScript.emit 'success', task
-      if o.print          then printLine t.output.trim()
-      else if o.compile   then writeJs t.file, t.output, base
-      else if o.lint      then lint t.file, t.output
+      if o.print
+        printLine t.output.trim()
+      else if o.compile || o.map
+        writeJs base, t.file, t.output, options.jsPath, t.sourceMap
+      else if o.lint
+        lint t.file, t.output
   catch err
     CoffeeScript.emit 'failure', err, task
     return if CoffeeScript.listeners('failure').length
@@ -242,26 +252,35 @@ removeSource = (source, base, removeJs) ->
           timeLog "removed #{source}"
 
 # Get the corresponding output JavaScript path for a source file.
-outputPath = (source, base) ->
-  basename  = path.basename source, source.match(/\.((lit)?coffee|coffee\.md)$/)?[0] or path.extname(source)
+outputPath = (source, base, extension=".js") ->
+  basename  = helpers.baseFileName source, yes
   srcDir    = path.dirname source
   baseDir   = if base is '.' then srcDir else srcDir.substring base.length
   dir       = if opts.output then path.join opts.output, baseDir else srcDir
-  path.join dir, basename + '.js'
+  path.join dir, basename + extension
 
 # Write out a JavaScript source file with the compiled code. By default, files
 # are written out in `cwd` as `.js` files with the same name, but the output
 # directory can be customized with `--output`.
-writeJs = (source, js, base) ->
-  jsPath = outputPath source, base
+#
+# If `generatedSourceMap` is provided, this will write a `.map` file into the
+# same directory as the `.js` file.
+writeJs = (base, sourcePath, js, jsPath, generatedSourceMap = null) ->
+  sourceMapPath = outputPath sourcePath, base, ".map"
   jsDir  = path.dirname jsPath
   compile = ->
-    js = ' ' if js.length <= 0
-    fs.writeFile jsPath, js, (err) ->
-      if err
-        printLine err.message
-      else if opts.compile and opts.watch
-        timeLog "compiled #{source}"
+    if opts.compile
+      js = ' ' if js.length <= 0
+      if generatedSourceMap then js = "#{js}\n/*\n//@ sourceMappingURL=#{helpers.baseFileName sourceMapPath}\n*/\n"
+      fs.writeFile jsPath, js, (err) ->
+        if err
+          printLine err.message
+        else if opts.compile and opts.watch
+          timeLog "compiled #{sourcePath}"
+    if generatedSourceMap
+      fs.writeFile sourceMapPath, generatedSourceMap, (err) ->
+        if err
+          printLine "Could not write source map: #{err.message}"
   exists jsDir, (itExists) ->
     if itExists then compile() else exec "mkdir -p #{jsDir}", compile
 
@@ -297,15 +316,25 @@ parseOptions = ->
   optionParser  = new optparse.OptionParser SWITCHES, BANNER
   o = opts      = optionParser.parse process.argv[2..]
   o.compile     or=  !!o.output
-  o.run         = not (o.compile or o.print or o.lint)
+  o.run         = not (o.compile or o.print or o.lint or o.map)
   o.print       = !!  (o.print or (o.eval or o.stdio and o.compile))
   sources       = o.arguments
   sourceCode[i] = null for source, i in sources
   return
 
 # The compile-time options to pass to the CoffeeScript compiler.
-compileOptions = (filename) ->
-  {filename, literate: helpers.isLiterate(filename), bare: opts.bare or opts.goog, header: opts.compile, goog: opts.goog}
+compileOptions = (filename, base) ->
+  {
+    filename
+    literate: helpers.isLiterate(filename)
+    bare: opts.bare or opts.goog
+    goog: opts.goog
+    header: opts.compile
+    sourceMap: opts.map
+    jsPath: if (filename isnt null and base isnt null) then (outputPath filename, base) else null
+    workingDirectory: process.cwd()
+  }
+
 
 # Start up a new Node.js instance with the arguments in `--nodejs` passed to
 # the `node` binary, preserving the other options.
