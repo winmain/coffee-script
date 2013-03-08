@@ -233,6 +233,8 @@ exports.Block = class Block extends Base
       else if top
         node.front = true
         code = node.compile o
+        unless code?
+          continue
         unless node.isStatement o
           code = "#{@tab}#{code};"
         codes.push code
@@ -519,16 +521,20 @@ exports.Comment = class Comment extends Base
 exports.Include = class Include extends Base
   constructor: (@packages) ->
 
+  isStatement: -> yes
+
   compileNode: (o) ->
     pack.compile(o) for pack in @packages
-    return ''
+    return null
 
 exports.Provide = class Provide extends Base
   constructor: (@packages) ->
 
+  isStatement: -> yes
+
   compileNode: (o) ->
     addProvide pack.compile(o) for pack in @packages
-    return ''
+    return null
 
 #### IncludeArg
 
@@ -639,7 +645,7 @@ exports.Call = class Call extends Base
       if action?
         namespace_arg = @args[0].compile(o).slice(1, -1)
         action(namespace_arg)
-        return ''
+        return null
 
     @variable?.front = @front
     if code = Splat.compileSplattedArray o, @args, true
