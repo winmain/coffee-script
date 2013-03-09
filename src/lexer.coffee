@@ -36,6 +36,7 @@ exports.Lexer = class Lexer
   tokenize: (code, opts = {}) ->
     @literate = opts.literate  # Are we lexing literate CoffeeScript?
     @indent   = 0              # The current indentation level.
+    @inJsDocComment = no       # Are we currently parsing JSDOC comment?
     @indebt   = 0              # The over-indentation at the current level.
     @outdebt  = 0              # The under-outdentation at the current level.
     @indents  = []             # The stack of all current indentation levels.
@@ -54,6 +55,7 @@ exports.Lexer = class Lexer
     i = 0
     while @chunk = code[i..]
       consumed = \
+           @jsDocToken()      or
            @identifierToken() or
            @commentToken()    or
            @whitespaceToken() or
@@ -89,6 +91,33 @@ exports.Lexer = class Lexer
 
   # Tokenizers
   # ----------
+
+  # Matches begining, end and contents of JSDOC comments. JSDOC comment is each
+  # comment of the form:
+  #   ###* 
+  #     some possibly, but not necessarily multiline contents 
+  #   ###
+  jsDocToken: ->
+    if @inJsDocComment
+      match = JSDOC_END.exec @chunk
+      if match
+        @token 'JSDOC_END', match[0]
+        @inJsDocComment = no
+        return match[0].length
+      match = JSDOC_LINE.exec @chunk
+      if match and match[0].length
+        if HEREDOC_ILLEGAL.test match[0]
+          @error "block comment cannot contain \"*/\", starting"
+        @token 'JSDOC_LINE', match[0]
+        return match[0].length
+    else
+      match = JSDOC_START.exec @chunk
+      if match
+        @token 'JSDOC_START', match[0]
+        @inJsDocComment = yes
+        return match[0].length
+
+    return 0
 
   # Matches identifying literals: variables, keywords, method names, etc.
   # Check to ensure that JavaScript reserved words aren't being used as
@@ -216,6 +245,8 @@ exports.Lexer = class Lexer
 
   # Matches and consumes comments.
   commentToken: ->
+    if @inJsDocComment
+      return 0
     return 0 unless match = @chunk.match COMMENT
     [comment, here] = match
     if here
@@ -774,6 +805,9 @@ OPERATOR   = /// ^ (
 
 WHITESPACE = /^[^\n\S]+/
 
+JSDOC_START = /^###[*]/
+JSDOC_LINE  = /^((#(?!##))|[^#\n])*/
+JSDOC_END   = /^###/
 COMMENT    = /^###([^#][\s\S]*?)(?:###[^\n\S]*|(?:###)$)|^(?:\s*#(?!##[^#]).*)+/
 
 CODE       = /^[-=]>/

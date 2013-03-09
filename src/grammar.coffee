@@ -94,6 +94,7 @@ grammar =
   Statement: [
     o 'Return'
     o 'Comment'
+    o 'JsDocComment'
     o 'Include'
     o 'Provide'
     o 'STATEMENT',                              -> new Literal $1
@@ -165,6 +166,7 @@ grammar =
     o 'ObjAssignable :
        INDENT Expression OUTDENT',              -> new Assign LOC(1)(new Value($1)), $4, 'object'
     o 'Comment'
+    o 'JsDocComment'
   ]
 
   ObjAssignable: [
@@ -182,6 +184,19 @@ grammar =
   # A block comment.
   Comment: [
     o 'HERECOMMENT',                            -> new Comment $1
+  ]
+
+  # A content of JSDOC comment
+  JsDocContent: [
+    o 'JSDOC_START',                            -> []
+    o 'JsDocContent TERMINATOR',                -> $1
+    o 'JsDocContent INDENT',                    -> $1
+    o 'JsDocContent OUTDENT',                   -> $1
+    o 'JsDocContent JSDOC_LINE',                -> $1.concat $2
+  ]
+  # A JSDOC comment.
+  JsDocComment: [
+    o 'JsDocContent JSDOC_END',                 -> new Comment("*" + $1.join('\n'))
   ]
 
   # The **Code** node is the function literal. It's defined by an indented block
