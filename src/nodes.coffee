@@ -268,9 +268,7 @@ exports.Block = class Block extends Base
     @tab  = o.indent
     top   = o.level is LEVEL_TOP
     compiledNodes = []
-
     for node, index in @expressions
-
       node = node.unwrapAll()
       node = (node.unfoldSoak(o) or node)
       if node instanceof Block
@@ -342,7 +340,6 @@ exports.Block = class Block extends Base
           [short, namespace] = scopedInclude
           scopeFragments.push @makeCode "var #{short} = #{namespace};\n"
 
-          #console.log(fragments)
         fragments = [].concat(
           @makeCode("goog.scope(function() {\n"),
           scopeFragments,
@@ -424,6 +421,7 @@ exports.Literal = class Literal extends Base
     else
       @value
     answer = if @isStatement() then "#{@tab}#{code};" else code
+
     [@makeCode answer]
 
   toString: ->
@@ -553,6 +551,7 @@ exports.Value = class Value extends Base
       fragments.push @makeCode '.'
     for prop in props
       fragments.push (prop.compileToFragments o)...
+
     fragments
 
   # Unfold a soak into an `If`: `a?.b` -> `a.b if a?`
@@ -586,6 +585,26 @@ exports.Comment = class Comment extends Base
     code = '/*' + multident(@comment, @tab) + "\n#{@tab}*/\n"
     code = o.indent + code if (level or o.level) is LEVEL_TOP
     [@makeCode code]
+
+#### JsDoc Comment
+
+exports.JsDocComment = class JsDocComment extends Base
+  constructor: (@lines) ->
+
+  isStatement: YES
+  makeReturn: THIS
+
+  compileNode: (o, level) ->
+    if @lines.length > 1
+      separator = '\n'
+    else
+      separator = ''
+    fragments = [].concat(
+      @makeCode("/**#{separator}"),
+      (@makeCode(line + separator) for line in @lines),
+      @makeCode('*/'),
+    )
+    return fragments
 
 #### Include
  
@@ -1080,10 +1099,11 @@ exports.Class = class Class extends Base
 
   # Merge the properties from a top-level object as prototypal properties
   # on the class.
-  addProperties: (node, name, o) ->
+  addProperties: (node, name, o, jsDoc) ->
     props = node.base.properties[..]
     exprs = while assign = props.shift()
       if assign instanceof Assign
+        assign.jsDoc = jsDoc
         base = assign.variable.base
         delete assign.context
         func = assign.value
@@ -1094,6 +1114,7 @@ exports.Class = class Class extends Base
             throw new SyntaxError 'cannot define a constructor as a bound function'
           if func instanceof Code
             @ctor = func
+            @ctor.jsDoc = jsDoc
             @ctorBlock = new Block [@ctor]
             # In goog mode constructor must be the very first statement in the class,
             # so we set it directly in compileNode
@@ -1111,6 +1132,7 @@ exports.Class = class Class extends Base
             if func instanceof Code and func.bound
               @boundFuncs.push base
               func.bound = no
+      jsDoc = undefined
       assign
     compact exprs
 
@@ -1121,9 +1143,15 @@ exports.Class = class Class extends Base
       return false if child instanceof Class
       if child instanceof Block
         for node, i in exps = child.expressions
+          if o.goog and node instanceof JsDocComment and child.expressions[i+1]?
+            exps[i] = []
+            exps[i+1].jsDoc = node
+            continue
           if node instanceof Value and node.isObject(true)
             cont = false
-            exps[i] = @addProperties node, name, o
+            exps[i] = @addProperties node, name, o, node.jsDoc
+          else if node.jsDoc
+            [exps[i-1], node.jsDoc] = [node.jsDoc, undefined]
         child.expressions = exps = flatten exps
       cont and child not instanceof Class
 
@@ -1171,6 +1199,9 @@ exports.Class = class Class extends Base
     # Scope in google mode, support short reference to class in class scope
     if o.goog and name != fullname
       @ctorBlock.push new Literal "var #{name} = #{fullname}"
+    # Ensure JSDoc comment
+    if o.goog and @ctor.jsDoc
+      @ctorBlock.unshift @ctor.jsDoc
 
   # Instead of generating the JavaScript string directly, we build up the
   # equivalent syntax tree and compile that, in pieces. You can see the
@@ -1240,10 +1271,14 @@ exports.Assign = class Assign extends Base
   # we've been assigned to, for correct internal references. If the variable
   # has not been seen yet within the current scope, declare it.
   compileNode: (o) ->
+    jsDoc = []
+    if @jsDoc
+      jsDoc = @jsDoc.compileToFragments o
+      jsDoc.push @makeCode '\n'
     if isValue = @variable instanceof Value
-      return @compilePatternMatch o if @variable.isArray() or @variable.isObject()
-      return @compileSplice       o if @variable.isSplice()
-      return @compileConditional  o if @context in ['||=', '&&=', '?=']
+      return (jsDoc.concat @compilePatternMatch o) if @variable.isArray() or @variable.isObject()
+      return (jsDoc.concat @compileSplice       o) if @variable.isSplice()
+      return (jsDoc.concat @compileConditional  o) if @context in ['||=', '&&=', '?=']
     compiledName = @variable.compileToFragments o, LEVEL_LIST
     name = fragmentsToText compiledName
     unless @context
@@ -1258,9 +1293,9 @@ exports.Assign = class Assign extends Base
       @value.klass = match[1] if match[1]
       @value.name  = match[2] ? match[3] ? match[4] ? match[5]
     val = @value.compileToFragments o, LEVEL_LIST
-    return (compiledName.concat @makeCode(": "), val) if @context is 'object'
+    return jsDoc.concat(compiledName.concat @makeCode(": "), val) if @context is 'object'
     answer = compiledName.concat @makeCode(" #{ @context or '=' } "), val
-    if o.level <= LEVEL_LIST then answer else @wrapInBraces answer
+    if o.level <= LEVEL_LIST then jsDoc.concat answer else jsDoc.concat @wrapInBraces answer
 
   # Brief implementation of recursive pattern matching, when assigning array or
   # object literals to a value. Peeks at their properties to assign inner names.

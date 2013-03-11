@@ -196,7 +196,7 @@ grammar =
   ]
   # A JSDOC comment.
   JsDocComment: [
-    o 'JsDocContent JSDOC_END',                 -> new Comment("*" + $1.join('\n'))
+    o 'JsDocContent JSDOC_END',                 -> new JsDocComment $1
   ]
 
   # The **Code** node is the function literal. It's defined by an indented block
