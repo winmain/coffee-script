@@ -589,19 +589,38 @@ exports.Comment = class Comment extends Base
 #### JsDoc Comment
 
 exports.JsDocComment = class JsDocComment extends Base
-  constructor: (@lines) ->
+  @singleAnnotations: ['constructor', 'type', 'extends']
+
+  constructor: (lines) ->
+    @annotations = {}
+    @lines = []
+    for line in lines
+      if line.annotation
+        if line.annotation in JsDocComment.singleAnnotations
+          @annotations["@" + line.annotation] = line.value
+        else
+          @lines.push "@#{line.annotation} #{line.value}"
+      else
+        @lines.push line.value
 
   isStatement: YES
   makeReturn: THIS
 
   compileNode: (o, level) ->
-    if @lines.length > 1
+    annotationFragments = []
+    for annotation in JsDocComment.singleAnnotations
+      if @annotations["@" + annotation]?
+        annotationFragments.push @makeCode("@#{annotation} #{@annotations["@" + annotation]}\n")
+
+    if @lines.length + annotationFragments.length > 1
       separator = '\n'
     else
       separator = ''
+
     fragments = [].concat(
       @makeCode("/**#{separator}"),
       (@makeCode(line + separator) for line in @lines),
+      annotationFragments,
       @makeCode('*/'),
     )
     return fragments
@@ -1192,16 +1211,20 @@ exports.Class = class Class extends Base
       @body.expressions.unshift @ctorBlock unless o.goog
     else
       @addBoundFunctions o
+       
+    # Ensure JSDoc comment
+    if o.goog
+      @ctor.jsDoc or= new JsDocComment []
+      @ctorBlock.unshift @ctor.jsDoc
+      @ctor.jsDoc.annotations['@constructor'] = ''
 
     # Google inheritance
     if o.goog and @parent
       @ctorBlock.push new Literal "goog.inherits(#{fullname}, #{@parent.compile(o)})"
+      @ctor.jsDoc.annotations['@extends'] = @parent.compile o
     # Scope in google mode, support short reference to class in class scope
     if o.goog and name != fullname
       @ctorBlock.push new Literal "var #{name} = #{fullname}"
-    # Ensure JSDoc comment
-    if o.goog and @ctor.jsDoc
-      @ctorBlock.unshift @ctor.jsDoc
 
   # Instead of generating the JavaScript string directly, we build up the
   # equivalent syntax tree and compile that, in pieces. You can see the

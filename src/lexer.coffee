@@ -108,7 +108,7 @@ exports.Lexer = class Lexer
       if match and match[0].length
         if HEREDOC_ILLEGAL.test match[0]
           @error "block comment cannot contain \"*/\", starting"
-        @token 'JSDOC_LINE', match[0]
+        @token 'JSDOC_LINE', [annotation: match[1], value: match[2]], 0, match[0].length
         return match[0].length
     else
       match = JSDOC_START.exec @chunk
@@ -806,7 +806,7 @@ OPERATOR   = /// ^ (
 WHITESPACE = /^[^\n\S]+/
 
 JSDOC_START = /^###[*]/
-JSDOC_LINE  = /^((#(?!##))|[^#\n])*/
+JSDOC_LINE  = /^[^\n\S]*(?:@(\w*)[^\n\S]*)?((?:(#(?!##))|[^#\n])*)/
 JSDOC_END   = /^###/
 COMMENT    = /^###([^#][\s\S]*?)(?:###[^\n\S]*|(?:###)$)|^(?:\s*#(?!##[^#]).*)+/
 
