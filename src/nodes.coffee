@@ -427,6 +427,18 @@ exports.Literal = class Literal extends Base
   toString: ->
     ' "' + @value + '"'
 
+#### Cast
+
+# Cast is Google Closure cast expression i.e. /** @type {...} */
+exports.Cast = class Cast extends Base
+  constructor: (@value) ->
+
+  isAssignable: NO
+  isComplex: NO
+
+  compileNode: (o) ->
+    [@makeCode "/** @type #{@value} */"]
+
 class exports.Undefined extends Base
   isAssignable: NO
   isComplex: NO

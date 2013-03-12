@@ -160,6 +160,28 @@ exports.Lexer = class Lexer
           if @value() is '!'
             poppedToken = @tokens.pop()
             id = '!' + id
+      else if tag is 'CAST'
+        length = input.length
+        chunkRest = @chunk.slice(length)
+        length += /\s*/.exec(chunkRest)[0].length
+        chunkRest = @chunk.slice(length)
+        unless chunkRest[0] is '<'
+          @error "Expected type delimiter '<' after cast"
+        i = 1
+        leftDel = 1
+        rightDel = 0
+        while leftDel > rightDel
+          if chunkRest[i] == '<'
+            leftDel++
+          if chunkRest[i] == '>'
+            rightDel++
+          i++
+          if i > chunkRest.length
+            @error "Could not find matching type delimiter '>'"
+        length += i
+        @token 'CAST', chunkRest.slice(1, i-1), 0, length
+        return length
+
 
     if id in JS_FORBIDDEN
       if forcedIdentifier
@@ -740,7 +762,7 @@ JS_KEYWORDS = [
 ]
 
 # CoffeeScript-only keywords.
-COFFEE_KEYWORDS = ['undefined', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'include', 'provide', 'as']
+COFFEE_KEYWORDS = ['undefined', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'include', 'provide', 'as', 'cast']
 
 COFFEE_ALIAS_MAP =
   and  : '&&'
@@ -889,7 +911,7 @@ NOT_SPACED_REGEX = NOT_REGEX.concat ')', '}', 'THIS', 'IDENTIFIER', 'STRING'
 # Tokens which could legitimately be invoked or indexed. An opening
 # parentheses or bracket following these tokens will be recorded as the start
 # of a function invocation or indexing operation.
-CALLABLE  = ['IDENTIFIER', 'STRING', 'REGEX', ')', ']', '}', '?', '::', '@', 'THIS', 'SUPER']
+CALLABLE  = ['IDENTIFIER', 'STRING', 'REGEX', ')', ']', '}', '?', '::', '@', 'THIS', 'SUPER', 'CAST']
 INDEXABLE = CALLABLE.concat 'NUMBER', 'BOOL', 'NULL', 'UNDEFINED'
 
 # Tokens that, when immediately preceding a `WHEN`, indicate that the `WHEN`

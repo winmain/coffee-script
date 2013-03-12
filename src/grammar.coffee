@@ -130,6 +130,7 @@ grammar =
   # A literal identifier, a variable name or property.
   Identifier: [
     o 'IDENTIFIER',                             -> new Literal $1
+    o 'CAST',                                   -> new Cast $1
   ]
 
   # Alphanumerics are separated from the other **Literal** matchers because
