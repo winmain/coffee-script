@@ -437,7 +437,7 @@ exports.Cast = class Cast extends Base
   isComplex: NO
 
   compileNode: (o) ->
-    [@makeCode "/** @type #{@value} */"]
+    [@makeCode "/** @type {#{@value}} */"]
 
 class exports.Undefined extends Base
   isAssignable: NO
