@@ -21,6 +21,26 @@ exports.repeat = repeat = (str, n) ->
     str += str
   res
 
+# Find position of a closing parenthesis
+exports.matchingParen = (parens, chunk, offset=0) ->
+  unless chunk[offset] == parens[0]
+    # Input does not contain a begining parenthesis
+    return -1
+
+  del = [1, 0]
+  while del[0] > del[1]
+    offset++
+    unless chunk.length > offset
+      # Input does not contain a closing parenthesis
+      return -2
+
+    for k in [0, 1]
+      if chunk[offset] == parens[k]
+        del[k]++
+
+  return offset
+
+
 # Trim out all falsy values from an array.
 exports.compact = (array) ->
   item for item in array when item

@@ -12,8 +12,8 @@
 {Rewriter, INVERSES} = require './rewriter'
 
 # Import the helpers we need.
-{count, starts, compact, last, invertLiterate, locationDataToString,
-throwSyntaxError} = require './helpers'
+{count, starts, matchingParen, compact, last, invertLiterate,
+  locationDataToString, throwSyntaxError} = require './helpers'
 
 # The Lexer Class
 # ---------------
@@ -165,24 +165,14 @@ exports.Lexer = class Lexer
         length = input.length
         chunkRest = @chunk.slice(length)
         length += /\s*/.exec(chunkRest)[0].length
-        chunkRest = @chunk.slice(length)
-        unless chunkRest[0] is '<'
+        endParen = matchingParen('<>', @chunk, length)
+        if endParen == -1
           @error "Expected type delimiter '<' after cast"
-        i = 1
-        leftDel = 1
-        rightDel = 0
-        while leftDel > rightDel
-          if chunkRest[i] == '<'
-            leftDel++
-          if chunkRest[i] == '>'
-            rightDel++
-          i++
-          if i > chunkRest.length
-            @error "Could not find matching type delimiter '>'"
-        length += i
-        @token 'CAST', chunkRest.slice(1, i-1), 0, length
-        return length
+        if endParen == -2
+          @error "Could not find matching type delimiter '>'"
 
+        @token 'CAST', @chunk.slice(length+1, endParen), 0, length
+        return endParen+1
 
     if id in JS_FORBIDDEN
       if forcedIdentifier
