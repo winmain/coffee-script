@@ -738,6 +738,9 @@ exports.Lexer = class Lexer
 
   # Are we in the midst of an unfinished expression?
   unfinished: ->
+    # Each line is finished inside JSDOC comment
+    if @inJsDocComment
+      return no
     LINE_CONTINUER.test(@chunk) or
     @tag() in ['\\', '.', '?.', '?::', 'UNARY', 'MATH', '+', '-', 'SHIFT', 'RELATION'
                'COMPARE', 'LOGIC', 'THROW', 'EXTENDS']
