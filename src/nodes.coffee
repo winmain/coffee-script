@@ -611,11 +611,11 @@ exports.JsDocComment = class JsDocComment extends Base
     for line in lines
       if line.annotation
         if line.annotation in JsDocComment.singleAnnotations
-          @annotations["@" + line.annotation] = line.value
+          @annotations["@" + line.annotation] = line.params
         else
-          @lines.push "@#{line.annotation} #{line.value}"
+          @lines.push "@#{line.annotation} #{line.params.join(" ")}"
       else
-        @lines.push line.value
+        @lines.push line
 
   isStatement: YES
   makeReturn: THIS
@@ -624,7 +624,7 @@ exports.JsDocComment = class JsDocComment extends Base
     annotationFragments = []
     for annotation in JsDocComment.singleAnnotations
       if @annotations["@" + annotation]?
-        annotationFragments.push @makeCode("@#{annotation} #{@annotations["@" + annotation]}\n")
+        annotationFragments.push @makeCode("@#{annotation} #{@annotations["@" + annotation].join(" ")}\n")
 
     if @lines.length + annotationFragments.length > 1
       separator = '\n'
@@ -1230,12 +1230,12 @@ exports.Class = class Class extends Base
     if o.goog
       @ctor.jsDoc or= new JsDocComment []
       @ctorBlock.unshift @ctor.jsDoc
-      @ctor.jsDoc.annotations['@constructor'] = ''
+      @ctor.jsDoc.annotations['@constructor'] = []
 
     # Google inheritance
     if o.goog and @parent
       @ctorBlock.push new Literal "goog.inherits(#{fullname}, #{@parent.compile(o)})"
-      @ctor.jsDoc.annotations['@extends'] = @parent.compile o
+      @ctor.jsDoc.annotations['@extends'] = [@parent.compile o]
     # Scope in google mode, support short reference to class in class scope
     if o.goog and name != fullname
       @ctorBlock.push new Literal "var #{name} = #{fullname}"

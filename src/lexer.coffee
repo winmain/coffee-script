@@ -105,11 +105,31 @@ exports.Lexer = class Lexer
         @token 'JSDOC_END', match[0]
         @inJsDocComment = no
         return match[0].length
+
+      match = ANNOTATION.exec @chunk
+      if match
+        length = match[0].length
+        params = []
+        if match[1] in ANNOTATIONS_WITH_TYPE
+          chunkRest = @chunk.slice(length)
+          length += /\s*/.exec(chunkRest)[0].length
+          endParen = matchingParen('{}', @chunk, length)
+          if endParen == -1
+            @error "#{match[0]} annotation requires type information in curly braces"
+          if endParen == -2
+            @error "#{match[0]} annotation missing closing brace }"
+          params.push @chunk.slice(length, endParen+1)
+          length = endParen+1
+        chunkRest = @chunk.slice(length)
+        length += WHITESPACE.exec(chunkRest)?[0].length or 0
+        @token 'ANNOTATION', {annotation: match[1], params: params}, 0, length
+        return length
+
       match = JSDOC_LINE.exec @chunk
       if match and match[0].length
         if HEREDOC_ILLEGAL.test match[0]
           @error "block comment cannot contain \"*/\", starting"
-        @token 'JSDOC_LINE', [annotation: match[1], value: match[2]], 0, match[0].length
+        @token 'JSDOC_LINE', match[0], 0, match[0].length
         return match[0].length
     else
       match = JSDOC_START.exec @chunk
@@ -755,6 +775,9 @@ JS_KEYWORDS = [
 # CoffeeScript-only keywords.
 COFFEE_KEYWORDS = ['undefined', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'include', 'provide', 'as', 'cast']
 
+# Google Closure annotations
+ANNOTATIONS_WITH_TYPE = ['define', 'enum', 'param', 'return', 'this', 'type', 'typedef']
+
 COFFEE_ALIAS_MAP =
   and  : '&&'
   or   : '||'
@@ -819,7 +842,8 @@ OPERATOR   = /// ^ (
 WHITESPACE = /^[^\n\S]+/
 
 JSDOC_START = /^###[*]/
-JSDOC_LINE  = /^[^\n\S]*(?:@(\w*)[^\n\S]*)?((?:(#(?!##))|[^#\n])*)/
+ANNOTATION  = /^@(\w*)/
+JSDOC_LINE  = /^[^\n\S]*((?:(#(?!##))|[^#\n])*)/
 JSDOC_END   = /^###/
 COMMENT    = /^###([^#][\s\S]*?)(?:###[^\n\S]*|(?:###)$)|^(?:\s*#(?!##[^#]).*)+/
 

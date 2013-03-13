@@ -187,17 +187,24 @@ grammar =
     o 'HERECOMMENT',                            -> new Comment $1
   ]
 
+  # A single line of JSDOC comment
+  JsDocLine: [
+    o 'JSDOC_LINE',                             -> $1
+    o 'ANNOTATION JSDOC_LINE',                  -> $1.params.push $2; return $1
+    o 'ANNOTATION',                             -> $1
+  ]
   # A content of JSDOC comment
   JsDocContent: [
-    o 'JSDOC_START',                            -> []
-    o 'JsDocContent TERMINATOR',                -> $1
-    o 'JsDocContent INDENT',                    -> $1
-    o 'JsDocContent OUTDENT',                   -> $1
-    o 'JsDocContent JSDOC_LINE',                -> $1.concat $2
+    o 'JsDocLine',                                -> [$1]
+    o 'JsDocContent TERMINATOR JsDocLine',        -> $1.concat $3
+    o 'JsDocContent INDENT JsDocContent OUTDENT', -> $1.concat $3
+    o 'JsDocContent INDENT OUTDENT',              -> $1
+    o 'INDENT JsDocContent OUTDENT',              -> $2
   ]
   # A JSDOC comment.
   JsDocComment: [
-    o 'JsDocContent JSDOC_END',                 -> new JsDocComment $1
+    o 'JSDOC_START OptTerminator JsDocContent OptTerminator JSDOC_END', -> new JsDocComment $3
+    o 'JSDOC_START OptTerminator JSDOC_END',                            -> new JsDocComment []
   ]
 
   # The **Code** node is the function literal. It's defined by an indented block
@@ -219,6 +226,12 @@ grammar =
   OptComma: [
     o ''
     o ','
+  ]
+
+  # An optional, trailing terminator
+  OptTerminator: [
+    o ''
+    o 'TERMINATOR'
   ]
 
   # The list of parameters that a function accepts can be of any length.
