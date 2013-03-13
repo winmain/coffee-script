@@ -2,7 +2,7 @@
 # -------
 
 # pull the helpers from `CoffeeScript.helpers` into local variables
-{starts, ends, compact, count, merge, extend, flatten, del, last, baseFileName, normalizePath, relativePath} = CoffeeScript.helpers
+{starts, ends, repeat, compact, count, merge, extend, flatten, del, last, baseFileName} = CoffeeScript.helpers
 
 
 # `starts`
@@ -25,6 +25,15 @@ test "the `ends` helper tests if a string ends with another string", ->
 test "the `ends` helper can take an optional offset", ->
   ok     ends('01234', '012', 2)
   ok not ends('01234', '234', 6)
+
+
+# `repeat`
+
+test "the `repeat` helper concatenates a given number of times", ->
+  eq 'asdasdasd', repeat('asd', 3)
+
+test "`repeat`ing a string 0 times always returns the empty string", ->
+  eq '', repeat('whatever', 0)
 
 
 # `compact`
@@ -95,7 +104,6 @@ test "the `last` helper allows one to specify an optional offset", ->
   ary = [0, 1, 2, 3, 4]
   eq 2, last(ary, 2)
 
-
 # `baseFileName`
 
 test "the `baseFileName` helper returns the file name to write to", ->
@@ -125,49 +133,3 @@ test "the `baseFileName` helper returns the file name to write to", ->
     name = baseFileName sourceFileName, yes
     filename = name + ext
     eq filename, expectedFileName
-
-
-# `normalizePath`
-
-test "various tests for normalizePath", ->
-  eq "/", normalizePath "/"
-  eq "", normalizePath "."
-  eq "", normalizePath ""
-  eq "/a/b", normalizePath "/a/b"
-  eq "/a/c/", normalizePath "/a/c/"
-  eq "/a/c", normalizePath "/a/c/", true
-  eq "/a/d", normalizePath "/a/../a/./d/c/.."
-  eq "/a/e/", normalizePath "/a/../a/./e/c/../"
-  eq "/a/e", normalizePath "/a/../a/./e/c/../", true
-  eq "../a", normalizePath "../a"
-  eq "../b", normalizePath "a/../../b"
-
-# `relativePath`
-
-test "various tests for relativePath", ->
-  # Same level
-  eq "foo.js", relativePath "foo.coffee", "foo.js"
-  eq "foo.js", relativePath "foo.coffee", "foo.js", "/work/src"
-  # Same level, but both down one level
-  eq "bar.js", relativePath "src/bar.coffee", "src/bar.js"
-  eq "bar.js", relativePath "src/bar.coffee", "src/bar.js", "/work/src"
-  # Sam level, using '.'' as from
-  eq "baz.js", relativePath ".", "baz.js"
-  eq "baz.js", relativePath ".", "baz.js", "/work/src"
-  eq "o/qux.js", relativePath ".", "o/qux.js"
-  eq "o/qux.js", relativePath ".", "o/qux.js", "/work/src"
-  # Up one level
-  eq "../", relativePath "src/bar.js", "."
-  eq "../", relativePath "src/bar.js", ".", "/work/src"
-  # Up and over one directory
-  eq "../dest/foo.js", relativePath "src/foo.coffee", "dest/foo.js"
-  eq "../dest/foo.js", relativePath "src/foo.coffee", "dest/foo.js", "/work/src"
-  # Absolute paths
-  eq "dest1/dest2/bar.js", relativePath "/bar.coffee", "/dest1/dest2/bar.js"
-  # File vs. directory - keep trailing '/'
-  eq "../c", relativePath "a/b/", "a/c"
-  eq "../d/", relativePath "a/b/", "a/d/"
-  # This should throw, since relativePath can't know the name of the directory that foo.coffee is in.
-  throws -> relativePath "../o/foo.js", "foo.coffee"
-  # With the CWD, this should pass.
-  eq "../src/foo.coffee", relativePath "../o/foo.js", "foo.coffee", "/work/src"

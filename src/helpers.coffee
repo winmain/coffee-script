@@ -92,8 +92,9 @@ buildLocationData = (first, last) ->
     last_line: last.last_line
     last_column: last.last_column
 
-# This returns a function which takes an object as a parameter, and if that object is an AST node,
-# updates that object's locationData.  The object is returned either way.
+# This returns a function which takes an object as a parameter, and if that
+# object is an AST node, updates that object's locationData.
+# The object is returned either way.
 exports.addLocationDataFn = (first, last) ->
     (obj) ->
       if ((typeof obj) is 'object') and (!!obj['updateLocationDataIfMissing'])
@@ -129,58 +130,40 @@ exports.isCoffee = (file) -> /\.((lit)?coffee|coffee\.md)$/.test file
 # Determine if a filename represents a Literate CoffeeScript file.
 exports.isLiterate = (file) -> /\.(litcoffee|coffee\.md)$/.test file
 
+# Throws a SyntaxError with a source file location data attached to it in a
+# property called `location`.
+exports.throwSyntaxError = (message, location) ->
+  location.last_line ?= location.first_line
+  location.last_column ?= location.first_column
+  error = new SyntaxError message
+  error.location = location
+  throw error
 
-# Remove any "." components in a path, any ".."s in the middle of a path.  Leaves a trailing '/'
-# if present, unless removeTrailingSlash is set.
-exports.normalizePath = normalizePath = (path, removeTrailingSlash=no) ->
-  root = no # Does this path start with the root?
-  parts = path.split '/'
-  newParts = []
-  i = 0
-  # If the path started with a '/', set the root flag.
-  if parts.length > 1 and parts[0] == ''
-    parts.shift()
-    root = yes
-  for part, i in parts
-    if part in ['.', '']
-      if (i is parts.length - 1) and not removeTrailingSlash
-        # Leave the trailing '/'.  Note that we're pushing a '', but because we join with '/'s
-        # later, this will become a '/'.
-        newParts.push ''
-    else if part is '..'
-      if newParts.length is 0 or (newParts.length and last newParts is '..')
-        # Leave the ".."
-        newParts.push '..'
-      else
-        # Drop the '..' and remote the previous element
-        newParts.pop()
-    else
-      newParts.push part
-  if root
-    if newParts.length is 0 then return '/'
-    if newParts.length[0] is '..'
-      # Uhh...  This doesn't make any sense.
-      throw new Error "Invalid path: #{path}"
-    newParts.unshift '' # Add back the leading "/"
-  newParts.join '/'
+# Creates a nice error message like, following the "standard" format
+# <filename>:<line>:<col>: <message> plus the line with the error and a marker
+# showing where the error is.
+exports.prettyErrorMessage = (error, fileName, code, useColors) ->
+  return error.stack or "#{error}" unless error.location
 
-# Solve the relative path from `from` to `to`.
-#
-# This is the same as node's `path.relative()`, but can be used even if we're not running in node.
-# If paths are relative (don't have a leading '/') then we assume they are both relative to to
-# same working directory.
-#
-# If `from` is a relative path that starts with '..', then `cwd` must be provided to resolve
-# parent path names.
-exports.relativePath = (from, to, cwd=null) ->
-  if cwd
-    from = cwd + "/" + from
-    to = cwd + "/" + to
-  from = normalizePath(from).split '/'
-  to = normalizePath(to).split '/'
-  while from.length > 0 and to.length > 0 and from[0] == to[0]
-    from.shift()
-    to.shift()
-  if from.length and from[0] is ".." then throw new Error "'cwd' must be specified if 'from' references parent directory: #{from.join '/'} -> #{to.join '/'}"
-  answer = repeat "../", from.length - 1
-  answer + "#{to.join '/'}"
+  {first_line, first_column, last_line, last_column} = error.location
+  codeLine = code.split('\n')[first_line]
+  start    = first_column
+  # Show only the first line on multi-line errors.
+  end      = if first_line is last_line then last_column + 1 else codeLine.length
+  marker   = repeat(' ', start) + repeat('^', end - start)
+
+  if useColors
+    colorize  = (str) -> "\x1B[1;31m#{str}\x1B[0m"
+    codeLine = codeLine[...start] + colorize(codeLine[start...end]) + codeLine[end..]
+    marker    = colorize marker
+
+  message = """
+  #{fileName}:#{first_line + 1}:#{first_column + 1}: error: #{error.message}
+  #{codeLine}
+  #{marker}
+            """
+
+  # Uncomment to add stacktrace.
+  #message += "\n#{error.stack}"
+
+  message

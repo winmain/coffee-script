@@ -5,13 +5,13 @@
 # interactive REPL.
 
 # External dependencies.
-fs                = require 'fs'
-path              = require 'path'
-helpers           = require './helpers'
-optparse          = require './optparse'
-CoffeeScript      = require './coffee-script'
-{spawn, exec}     = require 'child_process'
-{EventEmitter}    = require 'events'
+fs             = require 'fs'
+path           = require 'path'
+helpers        = require './helpers'
+optparse       = require './optparse'
+CoffeeScript   = require './coffee-script'
+{spawn, exec}  = require 'child_process'
+{EventEmitter} = require 'events'
 
 exists         = fs.exists or path.exists
 
@@ -143,9 +143,13 @@ compileScript = (file, input, base=null) ->
   catch err
     CoffeeScript.emit 'failure', err, task
     return if CoffeeScript.listeners('failure').length
-    return printLine err.message + '\x07' if o.watch
-    printWarn err instanceof Error and err.stack or "ERROR: #{err}"
-    process.exit 1
+    useColors = process.stdout.isTTY and not process.env.NODE_DISABLE_COLORS
+    message = helpers.prettyErrorMessage err, file or '[stdin]', input, useColors
+    if o.watch
+      printLine message + '\x07'
+    else
+      printWarn message
+      process.exit 1
 
 # Attach the appropriate listeners to compile scripts incoming over **stdin**,
 # and write them back to **stdout**.
@@ -324,17 +328,31 @@ parseOptions = ->
 
 # The compile-time options to pass to the CoffeeScript compiler.
 compileOptions = (filename, base) ->
-  {
+  answer = {
     filename
     literate: helpers.isLiterate(filename)
     bare: opts.bare or opts.goog
     goog: opts.goog
     header: opts.compile
     sourceMap: opts.map
-    jsPath: if (filename isnt null and base isnt null) then (outputPath filename, base) else null
-    workingDirectory: process.cwd()
   }
-
+  if filename
+    if base
+      cwd = process.cwd()
+      jsPath = outputPath filename, base
+      jsDir = path.dirname jsPath
+      answer = helpers.merge answer, {
+        jsPath
+        sourceRoot: path.relative jsDir, cwd
+        sourceFiles: [path.relative cwd, filename]
+        generatedFile: helpers.baseFileName(jsPath)
+      }
+    else
+      answer = helpers.merge answer,
+        sourceRoot: ""
+        sourceFiles: [helpers.baseFileName filename]
+        generatedFile: helpers.baseFileName(filename, yes) + ".js"
+  answer
 
 # Start up a new Node.js instance with the arguments in `--nodejs` passed to
 # the `node` binary, preserving the other options.
