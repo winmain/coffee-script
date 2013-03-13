@@ -12,7 +12,7 @@
 {Rewriter, INVERSES} = require './rewriter'
 
 # Import the helpers we need.
-{count, starts, compact, last, invertLiterate, locationDataToString, 
+{count, starts, compact, last, invertLiterate, locationDataToString,
 throwSyntaxError} = require './helpers'
 
 # The Lexer Class
