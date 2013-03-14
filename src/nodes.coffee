@@ -603,19 +603,18 @@ exports.Comment = class Comment extends Base
 #### JsDoc Comment
 
 exports.JsDocComment = class JsDocComment extends Base
-  @knownAnnotations: ['param', 'constructor', 'type', 'extends']
+  @knownAnnotations: ['constructor', 'type', 'extends']
 
   constructor: (lines) ->
     @annotations = {}
     @lines = []
     for line in lines
       if line.annotation
-        if line.annotation in JsDocComment.knownAnnotations
-          key = "@" + line.annotation
-          unless @annotations[key]?
-            @annotations[key] = []
-          @annotations[key].push line.params
-        else
+        key = "@" + line.annotation
+        unless @annotations[key]?
+          @annotations[key] = []
+        @annotations[key].push line.params
+        unless line.annotation in JsDocComment.knownAnnotations
           @lines.push "@#{line.annotation} #{line.params.join(" ")}"
       else
         @lines.push line
