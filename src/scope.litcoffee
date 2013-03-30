@@ -29,24 +29,29 @@ it belongs to.
         Scope.root = this unless @parent
 
 Add goog.provide
+
       provide: (name) ->
         @provides['#' + name] = name
 
 Add goog.require
+
       require: (name, short) ->
         @requires['#' + name] = name
         if short
           @scopedIncludes['#' + short] = name
 
 Get list of shortcut names for goog.scope
+
       getScopedIncludes: ->
         ([key.slice(1), name] for key, name of @scopedIncludes)
 
 Get requires that are not provided already
+
       getRequires: ->
         (name for key, name of @requires when not (key of @provides))
 
 Get provides
+
       getProvides: ->
         (name for key, name of @provides)
 
