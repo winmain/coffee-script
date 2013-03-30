@@ -614,8 +614,10 @@ exports.JsDocComment = class JsDocComment extends Base
         unless @annotations[key]?
           @annotations[key] = []
         @annotations[key].push line.params
+        if key == '@attr'
+          key = '@param'
         unless line.annotation in JsDocComment.knownAnnotations
-          @lines.push "@#{line.annotation} #{line.params.join(" ")}"
+          @lines.push "#{key} #{line.params.join(" ")}"
       else
         @lines.push line
 
