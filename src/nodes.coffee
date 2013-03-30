@@ -1241,7 +1241,7 @@ exports.Class = class Class extends Base
     # Google inheritance
     if o.goog and @parent
       @ctorBlock.push new Literal "goog.inherits(#{fullname}, #{@parent.compile(o)})"
-      @ctor.jsDoc.annotations['@extends'] = [[@parent.compile o]]
+      @ctor.jsDoc.annotations['@extends'] = [["{#{@parent.compile o}}"]]
     # Scope in google mode, support short reference to class in class scope
     if o.goog and name != fullname
       @ctorBlock.push new Literal "var #{name} = #{fullname}"
