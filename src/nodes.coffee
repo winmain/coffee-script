@@ -646,7 +646,7 @@ exports.JsDocComment = class JsDocComment extends Base
     return fragments
 
 #### Include
- 
+
 # Allow include statements of form include package1, package2, ..., packageN
 exports.Include = class Include extends Base
   constructor: (@packages) ->
@@ -1231,7 +1231,7 @@ exports.Class = class Class extends Base
       @body.expressions.unshift @ctorBlock unless o.goog
     else
       @addBoundFunctions o
-       
+
     # Ensure JSDoc comment
     if o.goog
       @ctor.jsDoc or= new JsDocComment []
@@ -1260,7 +1260,7 @@ exports.Class = class Class extends Base
     @setContext fullname
     @walkBody fullname, o
     @ensureConstructor name, fullname, o
-     
+
     # In goog mode constructor must be the very first statement in the class
     @body.expressions.unshift @ctorBlock if o.goog
     @body.spaced = yes
@@ -2405,7 +2405,7 @@ hasProp = (o) ->
 indexOf = (o) ->
   if o.goog
     addRequire 'goog.array'
-    return 'goog.array.indexOf.call'
+    return 'goog.array.indexOf'
   else
     return "#{utility 'indexOf'}.call"
 
